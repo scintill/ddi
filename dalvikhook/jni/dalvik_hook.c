@@ -76,6 +76,23 @@ void* dalvik_hook(struct dexstuff_t *dex, struct dalvik_hook_t *h)
 		log("%s(%s) = 0x%x\n", h->method_name, h->method_sig, h->method)
 
 	if (h->method) {
+		// copy the original method to mid, so the hook function can invoke it from there
+		// TODO free. also, should malloc() be avoided somehow?
+
+		// XXX We just have to hope Method doesn't grow and put critical stuff at the end we don't know about!
+		// I'm trying to think of ways to determine what this build of Dalvik thinks sizeof(Method) is, but so far they all
+		// involve even worse implementation-detail dependenices.
+		// Perhaps it's not worth worrying about, in light of the many other ways Dalvik could probably break us.
+		h->mid = malloc(sizeof(Method));
+		memcpy(h->mid, h->method, sizeof(Method));
+
+		// ACC_PRIVATE, makes it "direct", which shortcuts the vtable when JNI looks through dvmGetVirtualizedMethod().
+		// If the vtable is consulted, it finds the hook method and recurses until the stack is overflowed.
+		// I think this will cause an assertion error for static methods, but I haven't tested yet.
+		// There may be other changes we can make here that make dvmGetVirtualizedMethod() resolve the way we want,
+		// for both instance and static methods.
+		((Method*)h->mid)->a |= 2;
+
 		h->insns = h->method->insns;
 
 		if (h->debug_me) {
@@ -124,6 +141,7 @@ void* dalvik_hook(struct dexstuff_t *dex, struct dalvik_hook_t *h)
 
 int dalvik_prepare(struct dexstuff_t *dex, struct dalvik_hook_t *h, JNIEnv *env)
 {
+	return; // do nothing. keeping for compatiblity
 
 	// this seems to crash when hooking "constructors"
 
@@ -153,6 +171,8 @@ int dalvik_prepare(struct dexstuff_t *dex, struct dalvik_hook_t *h, JNIEnv *env)
 
 void dalvik_postcall(struct dexstuff_t *dex, struct dalvik_hook_t *h)
 {
+	return; // do nothing. keeping for compatiblity, but it could be repurposed as an un-hook function
+
 	h->method->insSize = h->n_iss;
 	h->method->registersSize = h->n_rss;
 	h->method->outsSize = h->n_oss;
